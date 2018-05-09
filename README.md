@@ -1,5 +1,8 @@
 # High Performance Scientific Computing - Matrix Multiplication
 
+- Name        : Tifani Warnita
+- Student ID  : 17M38271
+
 ## 1. Execution Instruction
 ### A. BLISLab Version
 1. Go to login node of TSUBAME. 
