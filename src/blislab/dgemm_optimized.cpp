@@ -77,8 +77,6 @@ inline void packB_kcxnc_d(int n, int k, float *XB, int ldXB, int offsetb, float 
   }
 }
 
-inline void pack
-
 #if 1
 #include "micro_kernel.h"
 #else
