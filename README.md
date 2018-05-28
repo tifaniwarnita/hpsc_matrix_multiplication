@@ -1,7 +1,10 @@
 # High Performance Scientific Computing - Matrix Multiplication
 
-## A. Execution Instruction
-### A.1 BLISLab Version
+- Name        : Tifani Warnita
+- Student ID  : 17M38271
+
+## 1. Execution Instruction
+### A. BLISLab Version
 1. Go to login node of TSUBAME. 
 2. Move to folder `src/blislab`.
 3. Type, `source sourceme.h`
@@ -13,7 +16,7 @@
     - `./dgemm_baseline.x [M] [N] [K]`
     - `./dgemm_optimized.x [M] [N] [K]`
 
-### A.2 CUDA Version
+### B. CUDA Version
 1. Go to q_node of TSUBAME, `qrsh -g tga-hpc-lecture -l q_node=1 -l h_rt=0:10:00`.
 2. Move to folder `src/cuda`.
 3. Load CUDA module, `module load cuda`.
@@ -22,14 +25,14 @@
     - Optimized code: `./cuda_optimized.x`
    
    
-## B. Result Comparison (best size so far) 
-### B.1 BLISLAB Version
+## 2. Result Comparison (best size so far) 
+### A. BLISLAB Version
 - `./dgemm_baseline.x 5000 5000 5000`
     5000	  5000	  5000	 240.78	 404.06
 - `./dgemm_optimized.x 5000 5000 5000`
     5000	  5000	  5000	 433.63	 409.06
 
-### B.2 CUDA Version
+### B. CUDA Version
 - `./cuda_baseline.x 1024`
  
   N=1024: 0.003412 s (629.391456 GFlops)
