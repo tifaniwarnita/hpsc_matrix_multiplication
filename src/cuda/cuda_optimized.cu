@@ -3,211 +3,150 @@
 #include <cstdio>
 #include <sys/time.h>
 
-// #define DEBUG
-#define BLOCK_SIZE 16
+#define BLOCK 16
 
-__global__ void
-matmul(
-    float *A, float *B, float *C,
-    int height_A, int width_A,
-    int height_B, int width_B) {
-    // shared memory
-    __shared__ float shared_A[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ float shared_B[BLOCK_SIZE][BLOCK_SIZE];
+__global__ void matmul(float *A, float *B, float *C, int M, int N, int K) {
+	// Shared memory
+	__shared__ float s_A[BLOCK][BLOCK];
+	__shared__ float s_B[BLOCK][BLOCK];
 
-    // shorthand
-    int bx = blockIdx.x, by = blockIdx.y;
-    int tx = threadIdx.x, ty = threadIdx.y;
+	int a_begin = N * BLOCK * blockIdx.y; // N * blockDim.y * blockIdx.y
+	int a_end = a_begin + N;
+	int a_step = BLOCK; // blockDim.x
 
-    int a_begin = width_A * BLOCK_SIZE * by;
-    int a_end = a_begin + width_A;
-    int a_step = BLOCK_SIZE;
+	int b_begin = BLOCK * blockIdx.x; // blockDim.y * blockIdx.x
+	int b_step = BLOCK * K; // blockDim.y * K
 
-    int b_begin = BLOCK_SIZE * bx;
-    int b_step = BLOCK_SIZE * width_B;
+	int a = a_begin;
+	int b = b_begin;
 
-    float sum = 0.0;
-    int a = a_begin;
-    int b = b_begin;
+	int a_th = N * threadIdx.y + threadIdx.x;
+	int b_th = K * threadIdx.y + threadIdx.x;
 
-    int a_temp = width_A * ty + tx;
-    int b_temp = width_B * ty + tx;
+	float sum = 0;
 
-    while (a < a_end) {
-        // copy to shared memory
-        __syncthreads();
-        shared_A[ty][tx] = A[a + a_temp];
-        shared_B[ty][tx] = B[b + b_temp];
-        __syncthreads();
+	while (a < a_end) {
+		// Copy to shared memory
+		__syncthreads();
+		s_A[threadIdx.y][threadIdx.x] = A[a + a_th];
+		s_B[threadIdx.y][threadIdx.x] = B[b + b_th];
+		__syncthreads();
 
-        // multiply
-    #pragma unroll
-        for (int i = 0; i < BLOCK_SIZE; ++i) {
-            sum += shared_A[ty][i] * shared_B[i][tx];
-        }
+		// Multiply
+	#pragma unroll
+		for (int i=0; i<BLOCK; i++) {
+			sum += s_A[threadIdx.y][i] * s_B[i][threadIdx.x];
+		}
 
-        a += a_step;
-        b += b_step;
-    }
+		a += a_step;
+		b += b_step;
+	}
 
-    // check if out of bound
-    if (by * BLOCK_SIZE + ty >= height_A) return;
-    if (bx * BLOCK_SIZE + tx >= width_B) return;
+	if (blockIdx.y * BLOCK + threadIdx.y >= M) return;
+    if (blockIdx.x * BLOCK + threadIdx.x >= K) return;
 
-    // set result in global memory
-    int c_index = \
-        by * width_B * BLOCK_SIZE + \
-        bx * BLOCK_SIZE + \
-        ty * width_B + \
-        tx;
-    C[c_index] = sum;
+	int c_idx = \
+		K * BLOCK * blockIdx.y + \
+		BLOCK * blockIdx.x + \
+		K * threadIdx.y + \
+		threadIdx.x;
+
+	C[c_idx] = sum;
 }
+ 
+int main(int argc, char **argv) {
+	int M, N, K;
+	switch(argc) {
+		case 2: M = atoi(argv[1]);
+				N = M;
+				K = M;
+				break;
+		case 4:	M = atoi(argv[1]);
+				N = atoi(argv[2]);
+				K = atoi(argv[3]);
+				break;
+		default: printf("Invalid number of parameters\n");
+				 return 1;
+	}
 
-int main(int argc, char** argv) {
-    // matrix size
-    int height_A, width_A;
-    int height_B, width_B;
+	// Host allocation
+	float *h_A = new float [M*N];
+	float *h_B = new float [N*K];
+	float *h_C = new float [M*K];
 
-    printf("Matrix A height: "); scanf("%d", &height_A);
-    printf("Matrix A width: "); scanf("%d", &width_A);
-    printf("Matrix B height: "); scanf("%d", &height_B);
-    printf("Matrix B width: "); scanf("%d", &width_B);
+	for (int i=0; i<M*N; i++) {
+		h_A[i] = drand48();
+	}
+	for (int i=0; i<N*K; i++) {
+		h_B[i] = drand48();
+	}
+	for (int i=0; i<M*K; i++) {
+		h_C[i] = 0;
+	}
 
-    if (height_A <= 0 || width_A <= 0 ||
-        height_B <= 0 || width_B <= 0) {
-        printf("Invalid matrix size\n");
-        return 1;
-    } else if (width_A != height_B) {
-        printf("width_A != height_B\n");
-        return 1;
-    }
+	// Device allocation
+	float *d_A, *d_B, *d_C;
+	int mem_A = M * N * sizeof(float);
+	int mem_B = N * K * sizeof(float);
+	int mem_C = M * K * sizeof(float);
+	cudaMalloc((void **) &d_A, mem_A);
+	cudaMalloc((void **) &d_B, mem_B);
+	cudaMalloc((void **) &d_C, mem_C);
 
-    // result size
-    int height_C = height_A;
-    int width_C = width_B;
+	// Copy from Host to Device
+	cudaMemcpy(d_A, h_A, mem_A, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_B, h_B, mem_B, cudaMemcpyHostToDevice);
+	cudaMemcpy(d_C, h_C, mem_C, cudaMemcpyHostToDevice);
 
-    // alloc host
-    int size_A = height_A * width_A;
-    int size_B = height_B * width_B;
-    int size_C = height_C * width_C;
+	dim3 grid((K/BLOCK)+(K%BLOCK!=0),(M/BLOCK)+(M%BLOCK!=0)); // number of blocks
+	dim3 block(BLOCK,BLOCK); // threads per block
 
-    int mem_A = sizeof(float) * size_A;
-    int mem_B = sizeof(float) * size_B;
-    int mem_C = sizeof(float) * size_C;
+	// CUDA
+	struct timeval tic, toc;
+	gettimeofday(&tic, NULL);
+	matmul<<<grid,block>>>(d_A, d_B, d_C, M, N, K);
+	cudaDeviceSynchronize();
+	gettimeofday(&toc, NULL);
+	double time = toc.tv_sec-tic.tv_sec+(toc.tv_usec-tic.tv_usec)*1e-6;
+	printf("[%dx%dx%d]\n", M, N, K);
+	printf("CUDA  : %lfs (%lf GFlops)\n", time, 2.*M*N*K/time/1e9);
 
-    float *host_A = new float[size_A];
-    float *host_B = new float[size_B];
-    float *host_C = new float[size_C];
+	// Copy Result from　Device to Host
+	cudaMemcpy(h_C, d_C, mem_C, cudaMemcpyDeviceToHost);
 
-    // init host
-#ifdef DEBUG
-    srand(0);
-#else
-    srand(time(NULL));
-#endif
-
-    for (int i = 0; i < size_A; ++i)
-        host_A[i] = rand() / (float)RAND_MAX;
-
-    for (int i = 0; i < size_B; ++i)
-        host_B[i] = rand() / (float)RAND_MAX;
-
-    for (int i = 0; i < size_C; ++i)
-        host_C[i] = 0.0;
-
-    // alloc device
-    float *dev_A;
-    float *dev_B;
-    float *dev_C;
-    cudaMalloc(&dev_A, mem_A);
-    cudaMalloc(&dev_B, mem_B);
-    cudaMalloc(&dev_C, mem_C);
-
-    // copy memory
-    cudaMemcpy(dev_A, host_A, mem_A, cudaMemcpyHostToDevice);
-    cudaMemcpy(dev_B, host_B, mem_B, cudaMemcpyHostToDevice);
-
-    // perform CUDA
-    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid(
-        (width_C / block.x) + (width_C % block.x != 0),
-        (height_C / block.y) + (height_C % block.y != 0));
-
-    struct timeval tic, toc;
-    gettimeofday(&tic, NULL);
-    matmul<<<grid,block>>>(
-        dev_A, dev_B, dev_C,
-        height_A, width_A,
-        height_B, width_B);
-    cudaDeviceSynchronize();
-    gettimeofday(&toc, NULL);
-
-    double elapsed = toc.tv_sec-tic.tv_sec+(toc.tv_usec-tic.tv_usec)*1e-6;
-    printf("(CUDA) [%dx%d]*[%dx%d]: %lfs (%lf GFlops)\n",
-        height_A, width_A,
-        height_B, width_B,
-        elapsed,
-        2.*height_A*width_A*width_B/elapsed/1e9);
-
-    // copy result
-    cudaMemcpy(host_C, dev_C, mem_C, cudaMemcpyDeviceToHost);
-
-    // perform CPU
-    float *host_D = new float[size_C];
-
-    gettimeofday(&tic, NULL);
+	// CPU
+	gettimeofday(&tic, NULL);
 #pragma omp parallel for
-    for (int i = 0; i < height_A; ++i) {
-        for (int j = 0; j < width_B; ++j) {
-        #ifdef DEBUG
-            float sum = 0.0;
-            for (int k = 0; k < height_B; ++k) {
-                sum += host_A[i*width_A + k] * host_B[k*width_B + j];
-            }
-            host_D[width_B*i + j] = sum;
-        #else
-            for (int k = 0; k < height_B; ++k) {
-                host_C[width_B*i + j] -= host_A[i*width_A + k] * host_B[k*width_B + j];
-            }
-        #endif
-        }
-    }
-    gettimeofday(&toc, NULL);
+	for (int i=0; i<M; ++i) {
+		for(int j=0; j<K; j++) {
+			for (int k=0; k<N; k++) {
+				h_C[K*i+j] -= h_A[N*i+k] * h_B[K*k+j];
+			}
+		}
+	}
+	gettimeofday(&toc, NULL);
+	time = toc.tv_sec-tic.tv_sec+(toc.tv_usec-tic.tv_usec)*1e-6;
+	printf("CPU   : %lfs (%lf GFlops)\n", time, 2.*M*N*K/time/1e9);
 
-    elapsed = toc.tv_sec-tic.tv_sec+(toc.tv_usec-tic.tv_usec)*1e-6;
-    printf("(CPU) [%dx%d]*[%dx%d]: %lfs (%lf GFlops)\n",
-        height_A, width_A,
-        height_B, width_B,
-        elapsed,
-        2.*height_A*width_A*width_B/elapsed/1e9);
+	// Calculate error
+	float err = 0;
+	for (int i=0; i<M; ++i) {
+		for (int j=0; j<N; j++) {
+			for(int k=0; k<K; k++) {
+				err += fabs(h_C[N*i+j]);
+			}
+		}
+	}
+	printf("Error : %f\n",err/M/K);
 
-    // calc error
-    float err = 0.0;
-    for (int i = 0; i < size_C; ++i)
-    #ifdef DEBUG
-        err += fabs(host_C[i]-host_D[i]);
-    #else
-        err += fabs(host_C[i]);
-    #endif
-    printf("error: %f\n",err/size_C);
+	// Free memory
+	delete[] h_A;
+    delete[] h_B;
+    delete[] h_C;
 
-#ifdef DEBUG
-    printf("\nDEBUG");
-    printf("\n\nA:\n"); for (int i = 0; i < size_A; ++i) printf("%f ", host_A[i]);
-    printf("\n\nB:\n"); for (int i = 0; i < size_B; ++i) printf("%f ", host_B[i]);
-    printf("\n\nC:\n"); for (int i = 0; i < size_C; ++i) printf("%f ", host_C[i]);
-    printf("\n\nD:\n"); for (int i = 0; i < size_C; ++i) printf("%f ", host_D[i]);
-#endif
-
-    // free
-    delete[] host_A;
-    delete[] host_B;
-    delete[] host_C;
-    delete[] host_D;
-    cudaFree(dev_A);
-    cudaFree(dev_B);
-    cudaFree(dev_C);
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
 
     return 0;
 }
-
