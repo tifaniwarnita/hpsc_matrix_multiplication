@@ -33,7 +33,7 @@
 |:-------------------:|:------------------:|:-------:|
 | BLISLAB - Baseline  | 5000 x 5000 x 5000 |  240.78 |
 | BLISLAB - Optimized | 5000 x 5000 x 5000 |  433.63 |
-| CUDA - Baseline     | 4096 x 4096 x 4096 |    ?    |
+| CUDA - Baseline     | 4096 x 4096 x 4096 |  288.16 |
 | CUDA - Optimized    | 4096 x 4096 x 4096 | 2305.91 |
 
 ### A. BLISLAB Version
@@ -53,3 +53,14 @@
     CUDA  : 0.001046s (2053.043641 GFlops)  
     CPU   : 0.388411s (5.528895 GFlops)  
     Error : 0.010121
+    
+- `./cuda_baseline.x 4096`  
+    N=4096: 0.476958 s (288.157350 GFlops)  
+    N=4096: 4.614974 s (29.781089 GFlops)  
+    error: 0.001008
+    
+- `./cuda_optimized.x 4096`  
+    [4096x4096x4096]  
+    CUDA  : 0.059603s (2305.906640 GFlops)  
+    CPU   : 91.365267s (1.504280 GFlops)  
+    Error : 0.007812  
