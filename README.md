@@ -3,7 +3,14 @@
 - Name        : Tifani Warnita
 - Student ID  : 17M38271
 
-## 1. Execution Instruction
+## 1. Introduction
+### A. BLISLab Version
+Try to find the magic number and use the blocking and optimized assembly code from BLISLab.
+
+### B. CUDA Version
+The idea is to divide big matrix into blocks of smaller matrices. One block thread handles one small block matrix and one thread handles one matrix cell. Matrix A and matrix B is copied into shared memory whereas matrix C is kept in the register.
+
+## 2. Execution Instruction
 ### A. BLISLab Version
 1. Go to login node of TSUBAME. 
 2. Move to folder `src/blislab`.
@@ -27,7 +34,7 @@
         - Any matrix   : `./cuda_optimized.x [M] [N] [K]`
    
    
-## 2. Results
+## 3. Results
 
 |       Category      |        Size        |  Gflops |
 |:-------------------:|:------------------:|:-------:|
