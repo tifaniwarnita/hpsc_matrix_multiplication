@@ -8,7 +8,8 @@
 Try to find the magic number and use the blocking and optimized assembly code from BLISLab.
 
 ### B. CUDA Version
-The idea is to divide big matrix into blocks of smaller matrices. One block thread handles one small block matrix and one thread handles one matrix cell. Matrix A and matrix B is copied into shared memory whereas matrix C is kept in the register.
+The idea is to divide big matrix into blocks of smaller matrices. One block thread handles one small block matrix and one thread handles one matrix cell. Matrix A and matrix B is copied into shared memory whereas matrix C is kept in the register. In the optimized code, it can receive non-squared matrix with any size.
+
 
 ## 2. Execution Instruction
 ### A. BLISLab Version
