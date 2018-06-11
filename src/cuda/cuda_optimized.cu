@@ -43,7 +43,7 @@ __global__ void matmul(float *A, float *B, float *C, int M, int N, int K) {
 	}
 
 	if (blockIdx.y * BLOCK + threadIdx.y >= M) return;
-    if (blockIdx.x * BLOCK + threadIdx.x >= K) return;
+	if (blockIdx.x * BLOCK + threadIdx.x >= K) return;
 
 	int c_idx = \
 		K * BLOCK * blockIdx.y + \
@@ -130,23 +130,19 @@ int main(int argc, char **argv) {
 
 	// Calculate error
 	float err = 0;
-	for (int i=0; i<M; ++i) {
-		for (int j=0; j<N; j++) {
-			for(int k=0; k<K; k++) {
-				err += fabs(h_C[N*i+j]);
-			}
-		}
+	for (int i=0; i<M*K; ++i) {
+		err += fabs(h_C[i]);
 	}
 	printf("Error : %f\n",err/M/K);
 
 	// Free memory
 	delete[] h_A;
-    delete[] h_B;
-    delete[] h_C;
+	delete[] h_B;
+	delete[] h_C;
 
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
+	cudaFree(d_A);
+	cudaFree(d_B);
+	cudaFree(d_C);
 
-    return 0;
+	return 0;
 }
