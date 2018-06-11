@@ -23,28 +23,49 @@ __global__ void matmul(float *A, float *B, float *C, int M, int N, int K) {
 	int a_th = N * threadIdx.y + threadIdx.x;
 	int b_th = K * threadIdx.y + threadIdx.x;
 
+	const int MN = M*N, NK = N*K;
 	float sum = 0;
 
-	while (a < a_end) {
-		// Copy to shared memory
-		__syncthreads();
-		s_A[threadIdx.y][threadIdx.x] = A[a + a_th];
-		s_B[threadIdx.y][threadIdx.x] = B[b + b_th];
-		__syncthreads();
+	if (M%BLOCK == 0 && N%BLOCK == 0 && K%BLOCK == 0) {
+		while (a < a_end) {
+			// Copy to shared memory
+			__syncthreads();
+			s_A[threadIdx.y][threadIdx.x] = A[a + a_th];
+			s_B[threadIdx.y][threadIdx.x] = B[b + b_th];
+			__syncthreads();
 
-		// Multiply
-	#pragma unroll
-		for (int i=0; i<BLOCK; i++) {
-			sum += s_A[threadIdx.y][i] * s_B[i][threadIdx.x];
+			// Multiply
+		#pragma unroll
+			for (int i=0; i<BLOCK; i++) {
+				sum += s_A[threadIdx.y][i] * s_B[i][threadIdx.x];
+			}
+
+			a += a_step;
+			b += b_step;
+		}
+	} else {
+		// Out of bound case
+		while (a < a_end) {
+			// Copy to shared memory
+			__syncthreads();
+			s_A[threadIdx.y][threadIdx.x] = a + a_th < MN ? A[a + a_th] : 0.0;
+			s_B[threadIdx.y][threadIdx.x] = b + b_th < NK ? B[b + b_th] : 0.0;
+			__syncthreads();
+
+			// Multiply
+		#pragma unroll
+			for (int i=0; i<BLOCK; i++) {
+				sum += s_A[threadIdx.y][i] * s_B[i][threadIdx.x];
+			}
+
+			a += a_step;
+			b += b_step;
 		}
 
-		a += a_step;
-		b += b_step;
+		if (blockIdx.y * BLOCK + threadIdx.y >= M) return;
+		if (blockIdx.x * BLOCK + threadIdx.x >= K) return;
 	}
-
-	if (blockIdx.y * BLOCK + threadIdx.y >= M) return;
-	if (blockIdx.x * BLOCK + threadIdx.x >= K) return;
-
+		
 	int c_idx = \
 		K * BLOCK * blockIdx.y + \
 		BLOCK * blockIdx.x + \
@@ -130,7 +151,7 @@ int main(int argc, char **argv) {
 
 	// Calculate error
 	float err = 0;
-	for (int i=0; i<M*K; ++i) {
+	for (int i=0; i<M*K; ++i) { 
 		err += fabs(h_C[i]);
 	}
 	printf("Error : %f\n",err/M/K);
